@@ -1,4 +1,9 @@
 module.exports = {
+    sortUser: function(num) {
+        // code
+
+        return num * 5;
+    },
     Class: [
         {id: 'abc'}
     ],
