@@ -1,9 +1,17 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 
-
 //declare express;
 var app = express();
+
+var path = require('path');
+//view engine setup
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+
+app.get('/index', (req, res)=>{
+    res.render('index', {data: "Hello World", data1: "Hele"});
+});
 
 //port
 app.listen(1211);
@@ -27,6 +35,22 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(bodyParser.json());
 
+app.post('/login', (req, res) => {
+    MongoClient.connect(url, (err, client) => {
+        if (err) {
+            return res.send({ error: 'DatabaseError', message: 'Connecting failed !' });
+        }
+        const db = client.db(dbName);
+
+        var userCollection = db.collection('Person');
+        userCollection.findOne({ username: req.body.username, password: req.body.password }).then((result) => {
+            return res.send({ user: result });
+        }).catch((err) => {
+            return res.send(err);
+        });
+    });
+});
+
 //getLists
 app.get('/getUsers', (req, res) => {
 
@@ -34,6 +58,7 @@ app.get('/getUsers', (req, res) => {
 
     var page = parseInt(req.query.page);
     var limit = parseInt(req.query.limit);
+    var sort = parseInt(req.query.sort);
 
     MongoClient.connect(url, (err, client) => {
         if (err) {
@@ -47,18 +72,22 @@ app.get('/getUsers', (req, res) => {
             page = 0;
             limit = 0;
         }
-        userCollection.find().skip((page - 1) * limit).limit(limit).toArray((err, docs) => {
-            if (err) {
+        userCollection.find({}, { birthdate: 1, _id: 0 })
+            .sort({ birthdate: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .toArray().then((result) => {
+                return res.send({ users: result, lenght: result.length });
+                client.close();
+            }).catch((err) => {
                 return res.send({ error: 'DatabaseError', message: 'Connecting failed ! ' });
-            } else {
-                return res.send({ users: docs, lenght: docs.length });
-            }
-        });
+                client.close();
+            });
     });
 });
 
 //createUser
-app.post('/createUser', (req, res) => {
+app.post('/createUsers', (req, res) => {
     MongoClient.connect(url, (err, client) => {
         if (err) {
             return res.send({ error: 'DatabaseError', message: 'Connecting failed !' });
@@ -69,10 +98,49 @@ app.post('/createUser', (req, res) => {
 
         userCollection.insertMany(users).then((result) => {
             res.send({ result: result, lenght: result.lenght });
+            client.close();
         }).catch((err) => {
             res.send({ error: 400, message: err });
         })
-        client.close();
+    });
+});
+
+app.post('/createUser', (req, res) => {
+    MongoClient.connect(url, (err, client) => {
+        if (err) {
+            return res.send({ error: 'DatabaseError', message: 'Connecting failed !' });
+        }
+        const db = client.db(dbName);
+        var userCollection = db.collection('Person');
+        var query = req.body;
+        if (userCollection.findOne({ username: query.username }) === null) {
+            userCollection.insertOne({
+                email: query.email,
+                gender: query.gender,
+                phone_number: query.phone_number,
+                birthdate: query.birthdate,
+                location: {
+                    street: query.street,
+                    city: query.city,
+                    state: query.state,
+                    postcode: query.postcode
+                },
+                username: query.username,
+                password: query.password,
+                first_name: query.first_name,
+                last_name: query.last_name,
+                title: query.title,
+                picture: query.picture
+            }).then((result) => {
+                res.send({ result: "Add successfully ! " });
+                client.close();
+            }).catch((err) => {
+                res.send({ error: 400, message: err });
+                client.close();
+            });
+        } else {
+            res.send({ result: "Account is exist ! " });
+        }
     });
 });
 
@@ -137,10 +205,10 @@ app.put('/updateUser/:id', (req, res) => {
                     }
             }).then((result) => {
                 res.send("Update thành công ! ");
+                client.close();
                 // res.send({ result: result, lenght: result.lenght });
             }).catch((err) => {
                 res.send({ error: 400, message: err });
             })
-        client.close();
     });
 });
